@@ -51,6 +51,18 @@ Cada uno tiene su prueba en `test/bandeja.test.js`, comprobada en rojo metiendo 
    botones del panel («Origen no permitido»). La prueba de cabeceras exige `same-origin`.
 4. **Cerrar sesión borra la sesión en el servidor**, no solo la cookie.
 5. **Contraseña con ojito** y límite de 5 intentos cada 15 minutos por IP.
+6. **Los adjuntos solo entran con enlace https** (nada de `javascript:` ni `http:`). Comprobado en rojo el 2026-11-01.
+7. **Los casos de dentro de la app no traen correo y no se mezclan en el historial** (el historial ignora el correo vacío).
+   Comprobado en rojo el 2026-11-01.
+
+## Casos de dentro de las apps y capturas (2026-11-01, commit 849bd7d)
+
+- La revisión horaria carga los tickets de cada app (PASO 7 d5) con `origen: "app"`, id `<app>-<id>` y sin `cliente_email`.
+  En el detalle no hay botón de correo: se contestan dentro de la app.
+- Cada mensaje puede traer `adjuntos: [{nombre, tipo?, url?}]`. Correo: solo el nombre (Richard lo abre en Gmail; el gerente
+  nunca abre adjuntos). App: enlace https firmado del almacenamiento de la propia app, que se abre en otra pestaña.
+- La columna `mensajes.adjuntos` se agregó a la base en vivo con `ALTER TABLE` por la API de la base; `schema.sql` ya la trae
+  para bases nuevas.
 
 Qué NO tocar: el nombre de la cookie `__Host-bandeja` (exige HTTPS y Path=/), el prefijo `/datos/` de las rutas
 (nunca `/api/`), y `_worker.js` a mano (se genera con `npm run build`).
