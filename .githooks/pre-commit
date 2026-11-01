@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+gitleaks git --staged --no-banner
+npm run build >/dev/null && git diff --quiet _worker.js || { echo "_worker.js no está al día: corre npm run build y agrégalo"; exit 1; }
+npx vitest run
