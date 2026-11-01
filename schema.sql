@@ -1,8 +1,8 @@
 -- Bandeja de soporte de Windoce. Idempotente: corre en cada publicación.
 CREATE TABLE IF NOT EXISTS conversaciones (
-  id TEXT PRIMARY KEY,                 -- id del hilo de Gmail, o form-<uuid> si vino de un formulario
+  id TEXT PRIMARY KEY,                 -- id del hilo de Gmail, form-<uuid> (formulario) o <app>-<id> (caso de dentro de la app)
   app TEXT NOT NULL,
-  cliente_email TEXT NOT NULL,
+  cliente_email TEXT NOT NULL,         -- vacío en los casos de dentro de la app
   cliente_nombre TEXT,
   asunto TEXT NOT NULL,
   idioma TEXT,
@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS mensajes (
   conversacion_id TEXT NOT NULL,
   de TEXT NOT NULL,                    -- cliente o soporte
   fecha TEXT NOT NULL,
-  texto TEXT NOT NULL
+  texto TEXT NOT NULL,
+  adjuntos TEXT                        -- JSON [{nombre, tipo, url}] o NULL; en bases viejas se agregó con ALTER TABLE
 );
 CREATE INDEX IF NOT EXISTS idx_msj_conv ON mensajes (conversacion_id, fecha);
 

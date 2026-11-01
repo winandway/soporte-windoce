@@ -1,4 +1,4 @@
-import { APPS, ESTADOS, PRIORIDADES, TIPOS } from "./datos.js";
+import { APPS, ESTADOS, ORIGENES, PRIORIDADES, TIPOS } from "./datos.js";
 
 export const esc = (v) =>
   String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -74,7 +74,7 @@ export function vistaBandeja({ filas, m, filtro, ahoraIso, ultimaIngesta }) {
           return `<a class="fila estado-${esc(f.estado)}" href="/c/${encodeURIComponent(f.id)}">
 <div class="fila-top">${chip("app", APPS[f.app] ?? f.app)}${chip(`est-${f.estado}`, ESTADOS[f.estado] ?? f.estado)}${f.prioridad !== "normal" ? chip(`pri-${f.prioridad}`, PRIORIDADES[f.prioridad]) : ""}${f.respuesta_auto ? chip("auto", "Respondida sola") : ""}</div>
 <div class="fila-asunto">${esc(f.asunto)}</div>
-<div class="fila-pie"><span>${esc(f.cliente_nombre || f.cliente_email)} · ${esc(TIPOS[f.tipo] ?? f.tipo)}</span><span>${espera !== null ? `Sin respuesta hace ${duracion(espera)}` : fechaCorta([f.ultima_respuesta, f.ultimo_cliente].filter(Boolean).sort().pop() ?? f.creado)}</span></div>
+<div class="fila-pie"><span>${f.origen === "app" ? "📱 " : ""}${esc(f.cliente_nombre || f.cliente_email || "Sin nombre")} · ${esc(TIPOS[f.tipo] ?? f.tipo)}</span><span>${espera !== null ? `Sin respuesta hace ${duracion(espera)}` : fechaCorta([f.ultima_respuesta, f.ultimo_cliente].filter(Boolean).sort().pop() ?? f.creado)}</span></div>
 </a>`;
         })
         .join("")
@@ -117,22 +117,25 @@ export function vistaDetalle({ conv, mensajes, eventos, historial }) {
     .map(
       (m) => `<article class="msj ${m.de === "soporte" ? "msj-soporte" : "msj-cliente"}">
 <header><strong>${m.de === "soporte" ? "Soporte" : esc(conv.cliente_nombre || conv.cliente_email)}</strong><time>${esc(fechaCorta(m.fecha))}</time></header>
-<p>${esc(m.texto).replace(/\n/g, "<br>")}</p></article>`,
+<p>${esc(m.texto).replace(/\n/g, "<br>")}</p>${vistaAdjuntos(m.adjuntos, conv)}</article>`,
     )
     .join("");
   const asuntoRespuesta = encodeURIComponent(`Re: ${conv.asunto}`);
-  const responder = `mailto:${encodeURIComponent(conv.cliente_email)}?subject=${asuntoRespuesta}`;
+  const responder = conv.cliente_email ? `mailto:${encodeURIComponent(conv.cliente_email)}?subject=${asuntoRespuesta}` : null;
   const enlaceGmail = conv.origen === "correo" ? `https://mail.google.com/mail/u/0/#all/${encodeURIComponent(conv.id)}` : null;
+  const acciones = conv.origen === "app"
+    ? `<p class="sub">Este caso llegó desde la ayuda de la app. Se contesta dentro de la app: el gerente lo responde cada hora, o díctale la respuesta.</p>`
+    : `<p class="acciones">${responder ? `<a class="primario" href="${responder}">Responder por correo</a>` : ""}${enlaceGmail ? `<a href="${enlaceGmail}" target="_blank" rel="noopener noreferrer">Abrir en Gmail</a>` : ""}</p>`;
   return pagina(
     conv.asunto,
     `<a class="volver" href="/">← Bandeja</a>
 <h1>${esc(conv.asunto)}</h1>
-<div class="fila-top">${chip("app", APPS[conv.app] ?? conv.app)}${chip("", TIPOS[conv.tipo] ?? conv.tipo)}${conv.respuesta_auto ? chip("auto", `Respondida sola${conv.plantilla ? ` (${conv.plantilla})` : ""}`) : ""}${conv.sesion_avisada ? chip("", "Proyecto avisado") : ""}</div>
+<div class="fila-top">${chip("app", APPS[conv.app] ?? conv.app)}${chip("", ORIGENES[conv.origen] ?? conv.origen)}${chip("", TIPOS[conv.tipo] ?? conv.tipo)}${conv.respuesta_auto ? chip("auto", `Respondida sola${conv.plantilla ? ` (${conv.plantilla})` : ""}`) : ""}${conv.sesion_avisada ? chip("", "Proyecto avisado") : ""}</div>
 <div class="detalle">
 <div class="hilo">${hilo}</div>
 <aside>
-<div class="caja"><h2>Cliente</h2><p>${esc(conv.cliente_nombre || "Sin nombre")}<br><span class="sub">${esc(conv.cliente_email)}</span></p>
-<p class="acciones"><a class="primario" href="${responder}">Responder por correo</a>${enlaceGmail ? `<a href="${enlaceGmail}" target="_blank" rel="noopener noreferrer">Abrir en Gmail</a>` : ""}</p></div>
+<div class="caja"><h2>Cliente</h2><p>${esc(conv.cliente_nombre || "Sin nombre")}${conv.cliente_email ? `<br><span class="sub">${esc(conv.cliente_email)}</span>` : ""}</p>
+${acciones}</div>
 <form class="caja" method="post" action="/c/${encodeURIComponent(conv.id)}/estado">
 <h2>Estado</h2><div class="estados">${botones}</div>
 <label>Prioridad <select name="prioridad" data-auto>${prioridades}</select></label>
@@ -145,6 +148,18 @@ ${historial.length ? `<div class="caja"><h2>Historial del cliente</h2><ul class=
 <div class="caja"><h2>Actividad</h2><ul class="historial">${eventos.map((e) => `<li>${esc(e.que)}<span class="sub">${esc(e.quien)} · ${esc(fechaCorta(e.momento))}</span></li>`).join("")}</ul></div>
 </aside></div>`,
   );
+}
+
+function vistaAdjuntos(adjuntos, conv) {
+  if (!adjuntos?.length) return "";
+  const items = adjuntos
+    .map((a) =>
+      a.url
+        ? `<li><a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">📎 ${esc(a.nombre)}</a></li>`
+        : `<li>📎 ${esc(a.nombre)} <span class="sub">${conv.origen === "correo" ? "(ábrelo en Gmail)" : ""}</span></li>`,
+    )
+    .join("");
+  return `<ul class="adjuntos">${items}</ul>`;
 }
 
 export function vistaNoEncontrado() {

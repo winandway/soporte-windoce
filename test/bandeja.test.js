@@ -187,6 +187,70 @@ describe("carga de correos", () => {
   });
 });
 
+describe("casos de dentro de las apps y capturas", () => {
+  const casoApp = (extra = {}) =>
+    conversacion({
+      id: "divoox-abc",
+      origen: "app",
+      cliente_email: undefined,
+      cliente_nombre: "Persona de prueba",
+      asunto: "Caso AD774C62 · Reporte de un problema",
+      tipo: "tecnico",
+      mensajes: [
+        {
+          id: "divoox-abc-1",
+          de: "cliente",
+          fecha: "2026-11-01T10:00:00.000Z",
+          texto: "La app se cierra",
+          adjuntos: [{ nombre: "captura.png", tipo: "image/png", url: "https://divoox.com/datos/adjunto/1?firma=x" }],
+        },
+      ],
+      ...extra,
+    });
+
+  it("un caso de la app entra sin correo y se ve con su captura", async () => {
+    const r = await ingerirPor([casoApp()]);
+    expect(r.status).toBe(200);
+    const cookie = await entrar();
+    const html = await (await pedir("/c/divoox-abc", { headers: { cookie } })).text();
+    expect(html).toContain("Dentro de la app");
+    expect(html).toContain("captura.png");
+    expect(html).toContain('href="https://divoox.com/datos/adjunto/1?firma=x"');
+    expect(html).not.toContain("mailto:");
+    expect(html).toContain("Se contesta dentro de la app");
+  });
+
+  it("un correo sin dirección del cliente se rechaza", async () => {
+    const r = await ingerirPor([conversacion({ cliente_email: undefined })]);
+    expect(r.status).toBe(400);
+  });
+
+  it("un adjunto que no es https no entra (nada de javascript:)", async () => {
+    const malo = casoApp();
+    malo.mensajes[0].adjuntos[0].url = "javascript:alert(1)";
+    expect((await ingerirPor([malo])).status).toBe(400);
+  });
+
+  it("el adjunto de un correo muestra solo el nombre y manda a Gmail", async () => {
+    await ingerirPor([
+      conversacion({
+        mensajes: [{ id: "m1", de: "cliente", fecha: "2026-11-01T10:00:00.000Z", texto: "Mira", adjuntos: [{ nombre: "error.jpg" }] }],
+      }),
+    ]);
+    const cookie = await entrar();
+    const html = await (await pedir("/c/hilo-1", { headers: { cookie } })).text();
+    expect(html).toContain("error.jpg");
+    expect(html).toContain("ábrelo en Gmail");
+  });
+
+  it("dos casos de la app sin correo no se mezclan en el historial", async () => {
+    await ingerirPor([casoApp(), casoApp({ id: "divoox-def", mensajes: [{ id: "d2", de: "cliente", fecha: "2026-11-01T11:00:00.000Z", texto: "Otro" }] })]);
+    const cookie = await entrar();
+    const html = await (await pedir("/c/divoox-abc", { headers: { cookie } })).text();
+    expect(html).not.toContain("Historial del cliente");
+  });
+});
+
 describe("estado de las conversaciones", () => {
   it("un estado puesto a mano se respeta hasta que el cliente vuelve a escribir", () => {
     const r1 = resumirMensajes([{ de: "cliente", fecha: "2026-11-01T10:00:00Z" }]);

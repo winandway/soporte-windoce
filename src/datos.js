@@ -33,17 +33,29 @@ export const PRIORIDADES = { normal: "Normal", alta: "Alta", urgente: "Urgente" 
 const fecha = z.string().datetime({ offset: true });
 const texto = (max) => z.string().trim().min(1).max(max);
 
+// Capturas y archivos: solo el nombre (correo: se abren en Gmail) o un enlace https de la propia app.
+const adjunto = z.object({
+  nombre: texto(200),
+  tipo: z.string().trim().max(100).optional(),
+  url: z.string().url().max(2000).refine((u) => u.startsWith("https://"), "solo https").optional(),
+});
+
 const mensaje = z.object({
   id: texto(200),
   de: z.enum(["cliente", "soporte"]),
   fecha,
   texto: z.string().trim().max(8000).transform((t) => t || "(sin texto)"),
+  adjuntos: z.array(adjunto).max(10).optional(),
 });
+
+export const ORIGENES = { correo: "Correo", app: "Dentro de la app", formulario: "Formulario web" };
 
 const conversacion = z.object({
   id: texto(200),
   app: z.enum(Object.keys(APPS)),
-  cliente_email: z.string().trim().toLowerCase().email().max(320),
+  origen: z.enum(["correo", "app"]).optional(),
+  // Los casos de dentro de la app no traen correo: la app no lo comparte con el gerente.
+  cliente_email: z.string().trim().toLowerCase().email().max(320).optional(),
   cliente_nombre: z.string().trim().max(200).optional(),
   asunto: texto(500),
   idioma: z.enum(["es", "en"]).optional(),
@@ -53,7 +65,7 @@ const conversacion = z.object({
   respuesta_auto: z.boolean().optional(),
   sesion_avisada: z.string().trim().max(200).optional(),
   mensajes: z.array(mensaje).min(1).max(200),
-});
+}).refine((c) => c.origen === "app" || c.cliente_email, { message: "falta cliente_email", path: ["cliente_email"] });
 
 export const esquemaIngesta = z.object({ conversaciones: z.array(conversacion).min(1).max(100) });
 
@@ -121,10 +133,10 @@ export async function ingerir(db, datos) {
     const sentencias = c.mensajes.map((m) =>
       db
         .prepare(
-          "INSERT INTO mensajes (id, conversacion_id, de, fecha, texto) VALUES (?, ?, ?, ?, ?) " +
-            "ON CONFLICT(id) DO UPDATE SET texto = excluded.texto",
+          "INSERT INTO mensajes (id, conversacion_id, de, fecha, texto, adjuntos) VALUES (?, ?, ?, ?, ?, ?) " +
+            "ON CONFLICT(id) DO UPDATE SET texto = excluded.texto, adjuntos = excluded.adjuntos",
         )
-        .bind(m.id, c.id, m.de, m.fecha, m.texto),
+        .bind(m.id, c.id, m.de, m.fecha, m.texto, m.adjuntos?.length ? JSON.stringify(m.adjuntos) : null),
     );
     if (actual) {
       sentencias.push(
@@ -149,12 +161,13 @@ export async function ingerir(db, datos) {
           .prepare(
             "INSERT INTO conversaciones (id, app, cliente_email, cliente_nombre, asunto, idioma, tipo, prioridad, estado, " +
               "plantilla, respuesta_auto, sesion_avisada, primer_mensaje, primera_respuesta, ultimo_cliente, " +
-              "ultima_respuesta, creado, actualizado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              "ultima_respuesta, creado, actualizado, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
           )
           .bind(
-            c.id, c.app, c.cliente_email, c.cliente_nombre ?? null, c.asunto, c.idioma ?? null, c.tipo,
+            c.id, c.app, c.cliente_email ?? "", c.cliente_nombre ?? null, c.asunto, c.idioma ?? null, c.tipo,
             c.prioridad ?? "normal", estado, c.plantilla ?? null, c.respuesta_auto ? 1 : 0, c.sesion_avisada ?? null,
             resumen.primer_mensaje, resumen.primera_respuesta, resumen.ultimo_cliente, resumen.ultima_respuesta, t, t,
+            c.origen ?? "correo",
           ),
       );
       sentencias.push(
@@ -246,11 +259,23 @@ export async function detalle(db, id) {
     db.prepare("SELECT * FROM mensajes WHERE conversacion_id = ? ORDER BY fecha ASC").bind(id).all(),
     db.prepare("SELECT * FROM eventos WHERE conversacion_id = ? ORDER BY momento DESC LIMIT 50").bind(id).all(),
     db
-      .prepare("SELECT id, app, asunto, estado, COALESCE(primer_mensaje, creado) AS creado FROM conversaciones WHERE cliente_email = ? AND id != ? ORDER BY 5 DESC LIMIT 50")
+      .prepare("SELECT id, app, asunto, estado, COALESCE(primer_mensaje, creado) AS creado FROM conversaciones WHERE cliente_email = ? AND cliente_email != '' AND id != ? ORDER BY 5 DESC LIMIT 50")
       .bind(conv.cliente_email, id)
       .all(),
   ]);
-  return { conv, mensajes: mensajes.results, eventos: eventos.results, historial: historial.results };
+  const conAdjuntos = mensajes.results.map((m) => ({ ...m, adjuntos: leerAdjuntos(m.adjuntos) }));
+  return { conv, mensajes: conAdjuntos, eventos: eventos.results, historial: historial.results };
+}
+
+function leerAdjuntos(json) {
+  if (!json) return [];
+  try {
+    const lista = JSON.parse(json);
+    return Array.isArray(lista) ? lista : [];
+  } catch {
+    console.error("adjuntos ilegibles en un mensaje");
+    return [];
+  }
 }
 
 /** Minutos entre dos fechas ISO, o null. */

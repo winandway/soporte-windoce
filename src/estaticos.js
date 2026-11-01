@@ -56,6 +56,7 @@ aside{display:grid;gap:12px;align-content:start}
 .estados{display:grid;grid-template-columns:1fr 1fr;gap:6px}.estado-btn{font-size:14px;padding:6px 8px}
 .estado-btn.activo{background:var(--marca);color:#fff;border-color:var(--marca)}
 .historial{list-style:none;margin:0;padding:0;display:grid;gap:8px}.historial li{display:grid;font-size:14px}
+.adjuntos{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:4px;font-size:14px}
 .aviso-borrador{font-size:13px;color:var(--aviso)}
 `;
 
