@@ -71,6 +71,6 @@ Qué NO tocar: el nombre de la cookie `__Host-bandeja` (exige HTTPS y Path=/), e
 
 - La app del celular es la misma página instalada como app (manifest). Avisos propios por push todavía no:
   los avisos urgentes siguen llegando por el gerente.
-- El formulario de contacto acepta los dominios de `ORIGENES_FORMULARIO` en `src/worker.js`. FinTwin, Escenia
-  y Win12 se agregan cuando sus webs tengan dominio confirmado.
+- El formulario de contacto acepta los dominios de `ORIGENES_FORMULARIO` en `src/worker.js`. FinTwin y Escenia
+  se agregan cuando sus webs tengan dominio confirmado.
 - Sin TypeScript: JavaScript con validación zod en todo lo que entra. El panel es solo en español porque lo usa Richard.

@@ -9,7 +9,6 @@ export const APPS = {
   escenia: "Escenia",
   mercatren: "Mercatren",
   beellon: "Beellon",
-  win12: "Win12",
   general: "General",
 };
 export const ESTADOS = {
