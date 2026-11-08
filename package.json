@@ -9,7 +9,7 @@
     "verify": "npm run build && npm run test && npm audit --audit-level=high && git diff --exit-code _worker.js"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^5.0.5",
+    "@vitest/coverage-v8": "^5.1.0",
     "esbuild": "^0.28.2",
     "vitest": "^5.0.5"
   },
